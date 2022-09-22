@@ -1,0 +1,3 @@
+usr/sbin/pcscd
+usr/lib/systemd/system/pcscd.socket
+usr/lib/systemd/system/pcscd.service
