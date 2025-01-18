@@ -1,8 +1,11 @@
 #!/usr/bin/make -f
 
-DEB_HOST_ARCH_OS ?= $(shell dpkg-architecture -qDEB_HOST_ARCH_OS)
-ifeq ($(DEB_HOST_ARCH_OS),hurd)
-  EXTRA_CONFIGURE_ARGS += --disable-usb
+include /usr/share/dpkg/architecture.mk
+
+ifeq ($(DEB_HOST_ARCH_OS),linux)
+  EXTRA_CONFIGURE_ARGS += -Dlibudev=true -Dlibusb=false -Dlibsystemd=true -Dsystemdunit=system
+else
+  EXTRA_CONFIGURE_ARGS += -Dlibudev=false -Dlibusb=true -Dlibsystemd=false
 endif
 
 export DEB_BUILD_MAINT_OPTIONS = hardening=+all
@@ -10,12 +13,11 @@ export DEB_BUILD_MAINT_OPTIONS = hardening=+all
 %:
 	dh $@
 
+override_dh_autoreconf:
+	rm configure.ac Makefile.am
+
 override_dh_auto_configure:
-	dh_auto_configure -- $(EXTRA_CONFIGURE_ARGS) \
-		--with-systemdsystemunitdir=/usr/lib/systemd/system \
-		--enable-usbdropdir=/usr/lib/pcsc/drivers \
-		--enable-ipcdir=/run/pcscd \
-		$(shell dpkg-buildflags --export=configure)
+	dh_auto_configure -- $(EXTRA_CONFIGURE_ARGS)
 
 ifeq ($(shell dpkg-vendor --is Ubuntu && echo yes) $(DEB_HOST_ARCH), yes i386)
    skip_packages = -Npcscd

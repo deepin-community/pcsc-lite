@@ -3,7 +3,7 @@
  *
  * Copyright (C) 1999-2002
  *  David Corcoran <corcoran@musclecard.com>
- * Copyright (C) 2002-2011
+ * Copyright (C) 2002-2024
  *  Ludovic Rousseau <ludovic.rousseau@free.fr>
  *
 Redistribution and use in source and binary forms, with or without
@@ -36,9 +36,7 @@ THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  */
 
 #include "config.h"
-#ifdef HAVE_SYSLOG_H
 #include <syslog.h>
-#endif
 #include <unistd.h>
 #include <stdio.h>
 #include <stdlib.h>
@@ -85,8 +83,6 @@ void DebugLogSetLevel(const int level)
 INTERNAL void DebugLogSetCategory(const int dbginfo)
 {
 	(void)dbginfo;
-
-	return 0;
 }
 
 INTERNAL void DebugLogCategory(const int category, const unsigned char *buffer,
@@ -100,7 +96,7 @@ INTERNAL void DebugLogCategory(const int category, const unsigned char *buffer,
 #else
 
 /**
- * Max string size dumping a maxmium of 2 lines of 80 characters
+ * Max string size dumping a maximum of 2 lines of 80 characters
  */
 #define DEBUG_BUF_SIZE 2048
 
@@ -112,7 +108,29 @@ static char LogLevel = PCSC_LOG_ERROR;
 
 static signed char LogDoColor = 0;	/**< no color by default */
 
-static void log_line(const int priority, const char *DebugBuffer);
+static pthread_mutex_t LastTimeMutex = PTHREAD_MUTEX_INITIALIZER;
+
+static void log_line(const int priority, const char *DebugBuffer,
+	unsigned int rv);
+
+/*
+ * log a message with the RV value returned by the daemon
+ */
+void log_msg_rv(const int priority, unsigned int rv, const char *fmt, ...)
+{
+	char DebugBuffer[DEBUG_BUF_SIZE];
+	va_list argptr;
+
+	if ((priority < LogLevel) /* log priority lower than threshold? */
+		|| (DEBUGLOG_NO_DEBUG == LogMsgType))
+		return;
+
+	va_start(argptr, fmt);
+	vsnprintf(DebugBuffer, sizeof DebugBuffer, fmt, argptr);
+	va_end(argptr);
+
+	log_line(priority, DebugBuffer, rv);
+}
 
 void log_msg(const int priority, const char *fmt, ...)
 {
@@ -127,10 +145,62 @@ void log_msg(const int priority, const char *fmt, ...)
 	vsnprintf(DebugBuffer, sizeof DebugBuffer, fmt, argptr);
 	va_end(argptr);
 
-	log_line(priority, DebugBuffer);
+	log_line(priority, DebugBuffer, -1);
 } /* log_msg */
 
-static void log_line(const int priority, const char *DebugBuffer)
+/* convert from integer rv value to a string value
+ * SCARD_S_SUCCESS -> "SCARD_S_SUCCESS"
+ */
+const char * rv2text(unsigned int rv)
+{
+	const char *rv_text = NULL;
+	static __thread char strError[30];
+
+#define CASE(x) \
+		case x: \
+			rv_text = "rv=" #x; \
+			break
+
+	if (rv != (unsigned int)-1)
+	{
+		switch (rv)
+		{
+			CASE(SCARD_S_SUCCESS);
+			CASE(SCARD_E_CANCELLED);
+			CASE(SCARD_E_INSUFFICIENT_BUFFER);
+			CASE(SCARD_E_INVALID_HANDLE);
+			CASE(SCARD_E_INVALID_PARAMETER);
+			CASE(SCARD_E_INVALID_VALUE);
+			CASE(SCARD_E_NO_MEMORY);
+			CASE(SCARD_E_NO_SERVICE);
+			CASE(SCARD_E_NO_SMARTCARD);
+			CASE(SCARD_E_NOT_TRANSACTED);
+			CASE(SCARD_E_PROTO_MISMATCH);
+			CASE(SCARD_E_READER_UNAVAILABLE);
+			CASE(SCARD_E_SHARING_VIOLATION);
+			CASE(SCARD_E_TIMEOUT);
+			CASE(SCARD_E_UNKNOWN_READER);
+			CASE(SCARD_E_UNSUPPORTED_FEATURE);
+			CASE(SCARD_F_COMM_ERROR);
+			CASE(SCARD_F_INTERNAL_ERROR);
+			CASE(SCARD_W_REMOVED_CARD);
+			CASE(SCARD_W_RESET_CARD);
+			CASE(SCARD_W_UNPOWERED_CARD);
+			CASE(SCARD_W_UNRESPONSIVE_CARD);
+			CASE(SCARD_E_NO_READERS_AVAILABLE);
+
+			default:
+				(void)snprintf(strError, sizeof(strError)-1,
+					"Unknown error: 0x%08X", rv);
+				rv_text = strError;
+		}
+	}
+
+	return rv_text;
+}
+
+static void log_line(const int priority, const char *DebugBuffer,
+	unsigned int rv)
 {
 	if (DEBUGLOG_SYSLOG_DEBUG == LogMsgType)
 		syslog(LOG_INFO, "%s", DebugBuffer);
@@ -141,7 +211,9 @@ static void log_line(const int priority, const char *DebugBuffer)
 		struct timeval tmp;
 		int delta;
 		pthread_t thread_id;
+		const char *rv_text = NULL;
 
+		(void)pthread_mutex_lock(&LastTimeMutex);
 		gettimeofday(&new_time, NULL);
 		if (0 == last_time.tv_sec)
 			last_time = new_time;
@@ -159,8 +231,11 @@ static void log_line(const int priority, const char *DebugBuffer)
 			delta = 99999999;
 
 		last_time = new_time;
+		(void)pthread_mutex_unlock(&LastTimeMutex);
 
 		thread_id = pthread_self();
+
+		rv_text = rv2text(rv);
 
 		if (LogDoColor)
 		{
@@ -187,18 +262,36 @@ static void log_line(const int priority, const char *DebugBuffer)
 					break;
 			}
 
-#ifdef __APPLE__
-#define THREAD_FORMAT "%p"
-#else
+#ifdef __GLIBC__
 #define THREAD_FORMAT "%lu"
+#else
+#define THREAD_FORMAT "%p"
 #endif
-			printf("%s%.8d%s [" THREAD_FORMAT "] %s%s%s\n",
-				time_pfx, delta, time_sfx, thread_id,
-				color_pfx, DebugBuffer, color_sfx);
+			if (rv_text)
+			{
+				const char * rv_pfx = "", * rv_sfx = "";
+				if (rv != SCARD_S_SUCCESS)
+				{
+					rv_pfx = "\33[31m"; /* Red */
+					rv_sfx = "\33[0m";
+				}
+
+				printf("%s%.8d%s [" THREAD_FORMAT "] %s%s%s, %s%s%s\n",
+					time_pfx, delta, time_sfx, thread_id,
+					color_pfx, DebugBuffer, color_sfx,
+					rv_pfx, rv_text, rv_sfx);
+			}
+			else
+				printf("%s%.8d%s [" THREAD_FORMAT "] %s%s%s\n",
+					time_pfx, delta, time_sfx, thread_id,
+					color_pfx, DebugBuffer, color_sfx);
 		}
 		else
 		{
-			printf("%.8d %s\n", delta, DebugBuffer);
+			if (rv_text)
+				printf("%.8d %s, %s\n", delta, DebugBuffer, rv_text);
+			else
+				printf("%.8d %s\n", delta, DebugBuffer);
 		}
 		fflush(stdout);
 	}
@@ -222,7 +315,7 @@ static void log_xxd_always(const int priority, const char *msg,
 		c += 3;
 	}
 
-	log_line(priority, DebugBuffer);
+	log_line(priority, DebugBuffer, -1);
 } /* log_xxd_always */
 
 void log_xxd(const int priority, const char *msg, const unsigned char *buffer,
@@ -259,9 +352,9 @@ void DebugLogSetLogType(const int dbgtype)
 	if ((DEBUGLOG_STDOUT_DEBUG == LogMsgType && isatty(fileno(stdout)))
 		|| (DEBUGLOG_STDOUT_COLOR_DEBUG == LogMsgType))
 	{
-		char *term;
+		const char *term;
 
-		term = getenv("TERM");
+		term = SYS_GetEnv("TERM");
 		if (term)
 		{
 			const char *terms[] = { "linux", "xterm", "xterm-color", "Eterm", "rxvt", "rxvt-unicode", "xterm-256color" };

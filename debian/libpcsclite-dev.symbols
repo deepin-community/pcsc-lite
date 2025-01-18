@@ -18,7 +18,3 @@ libpcscspy.so.0 libpcsclite-dev #MINVER#
  SCardSetAttrib@Base 1.8.0
  SCardStatus@Base 1.8.0
  SCardTransmit@Base 1.8.0
- g_rgSCardRawPci@Base 1.8.0
- g_rgSCardT0Pci@Base 1.8.0
- g_rgSCardT1Pci@Base 1.8.0
- pcsc_stringify_error@Base 1.8.0

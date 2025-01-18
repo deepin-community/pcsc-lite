@@ -3,7 +3,7 @@
  *
  * Copyright (C) 2000-2002
  *  David Corcoran <corcoran@musclecard.com>
- * Copyright (C) 2002-2011
+ * Copyright (C) 2002-2023
  *  Ludovic Rousseau <ludovic.rousseau@free.fr>
  *
 Redistribution and use in source and binary forms, with or without
@@ -77,7 +77,7 @@ LONG EHRegisterClientForEvent(int32_t filedes)
 } /* EHRegisterClientForEvent */
 
 /**
- * Try to unregisted a client
+ * Try to unregister a client
  * If no client is found then do not log an error
  */
 LONG EHTryToUnregisterClientForEvent(int32_t filedes)
@@ -179,14 +179,12 @@ void EHDestroyEventHandler(READER_CONTEXT * rContext)
 	rv = IFDGetCapabilities(rContext, TAG_IFD_POLLING_THREAD_KILLABLE,
 		&dwGetSize, ucGetData);
 
-#ifdef HAVE_PTHREAD_CANCEL
 	if ((IFD_SUCCESS == rv) && (1 == dwGetSize) && ucGetData[0])
 	{
 		Log1(PCSC_LOG_INFO, "Killing polling thread");
 		(void)pthread_cancel(rContext->pthThread);
 	}
 	else
-#endif
 	{
 		/* ask to stop the "polling" thread */
 		RESPONSECODE (*fct)(DWORD) = NULL;
@@ -285,7 +283,7 @@ static void * EHStatusHandlerThread(READER_CONTEXT * rContext)
 		if (rv == IFD_SUCCESS)
 		{
 			readerState = SCARD_PRESENT | SCARD_POWERED | SCARD_NEGOTIABLE;
-			rContext->powerState = POWER_STATE_POWERED;
+			RFSetPowerState(rContext, POWER_STATE_POWERED);
 			Log1(PCSC_LOG_DEBUG, "powerState: POWER_STATE_POWERED");
 
 			if (rContext->readerState->cardAtrLength > 0)
@@ -300,9 +298,9 @@ static void * EHStatusHandlerThread(READER_CONTEXT * rContext)
 		else
 		{
 			readerState = SCARD_PRESENT | SCARD_SWALLOWED;
-			rContext->powerState = POWER_STATE_UNPOWERED;
+			RFSetPowerState(rContext, POWER_STATE_UNPOWERED);
 			Log1(PCSC_LOG_DEBUG, "powerState: POWER_STATE_UNPOWERED");
-			Log3(PCSC_LOG_ERROR, "Error powering up card: %ld 0x%04lX", rv, rv);
+			Log2(PCSC_LOG_ERROR, "Error powering up card: %s", rv2text(rv));
 		}
 #endif
 
@@ -383,7 +381,7 @@ static void * EHStatusHandlerThread(READER_CONTEXT * rContext)
 				rContext->readerState->cardAtrLength = 0;
 				rContext->readerState->cardProtocol = SCARD_PROTOCOL_UNDEFINED;
 				rContext->readerState->readerState = SCARD_PRESENT;
-				rContext->powerState = POWER_STATE_UNPOWERED;
+				RFSetPowerState(rContext, POWER_STATE_UNPOWERED);
 				Log1(PCSC_LOG_DEBUG, "powerState: POWER_STATE_UNPOWERED");
 				rv = IFD_SUCCESS;
 				Log1(PCSC_LOG_INFO, "Skip card power on");
@@ -402,13 +400,13 @@ static void * EHStatusHandlerThread(READER_CONTEXT * rContext)
 				if (rv == IFD_SUCCESS)
 				{
 					rContext->readerState->readerState = SCARD_PRESENT | SCARD_POWERED | SCARD_NEGOTIABLE;
-					rContext->powerState = POWER_STATE_POWERED;
+					RFSetPowerState(rContext, POWER_STATE_POWERED);
 					Log1(PCSC_LOG_DEBUG, "powerState: POWER_STATE_POWERED");
 				}
 				else
 				{
 					rContext->readerState->readerState = SCARD_PRESENT | SCARD_SWALLOWED;
-					rContext->powerState = POWER_STATE_UNPOWERED;
+					RFSetPowerState(rContext, POWER_STATE_UNPOWERED);
 					Log1(PCSC_LOG_DEBUG, "powerState: POWER_STATE_UNPOWERED");
 					rContext->readerState->cardAtrLength = 0;
 				}
@@ -456,7 +454,7 @@ static void * EHStatusHandlerThread(READER_CONTEXT * rContext)
 			int timeout;
 
 #ifndef DISABLE_ON_DEMAND_POWER_ON
-			if (POWER_STATE_POWERED == rContext->powerState)
+			if (POWER_STATE_POWERED == RFGetPowerState(rContext))
 				/* The card is powered but not yet used */
 				timeout = PCSCLITE_POWER_OFF_GRACE_PERIOD;
 			else

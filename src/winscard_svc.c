@@ -5,7 +5,7 @@
  *  David Corcoran <corcoran@musclecard.com>
  * Copyright (C) 2003-2004
  *  Damien Sauveron <damien.sauveron@labri.fr>
- * Copyright (C) 2002-2011
+ * Copyright (C) 2002-2023
  *  Ludovic Rousseau <ludovic.rousseau@free.fr>
  * Copyright (C) 2009
  *  Jean-Luc Giraud <jlgiraud@googlemail.com>
@@ -52,6 +52,7 @@ THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 #include <stdlib.h>
 #include <unistd.h>
 #include <pthread.h>
+#include <stdbool.h>
 
 #include "pcscd.h"
 #include "winscard.h"
@@ -71,7 +72,7 @@ THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  * An Application Context contains Channels (\c hCard).
  */
 
-extern char AutoExit;
+extern bool AutoExit;
 static int contextMaxThreadCounter = PCSC_MAX_CONTEXT_THREADS;
 static int contextMaxCardHandles = PCSC_MAX_CONTEXT_CARD_HANDLES;
 
@@ -98,6 +99,7 @@ static void MSGCleanupClient(SCONTEXT *);
 static void * ContextThread(LPVOID pdwIndex);
 
 extern READER_STATE readerStates[PCSCLITE_MAX_READERS_CONTEXTS];
+extern int16_t ReaderEvents;
 
 static int contextsListhContext_seeker(const void *el, const void *key)
 {
@@ -148,14 +150,33 @@ LONG ContextsInitialize(int customMaxThreadCounter,
 void ContextsDeinitialize(void)
 {
 	int listSize;
+	(void)pthread_mutex_lock(&contextsList_lock);
 	listSize = list_size(&contextsList);
 #ifdef NO_LOG
 	(void)listSize;
 #endif
 	Log2(PCSC_LOG_DEBUG, "remaining threads: %d", listSize);
-	/* This is currently a no-op. It should terminate the threads properly. */
 
+	/* terminate all the client threads */
+	int rv = list_iterator_start(&contextsList);
+	if (0 == rv)
+		Log1(PCSC_LOG_ERROR, "list_iterator_start failed");
+	else
+	{
+		while (list_iterator_hasnext(&contextsList))
+		{
+			SCONTEXT * elt = list_iterator_next(&contextsList);
+			Log3(PCSC_LOG_DEBUG, "Cancel dwClientID=%d hContext: %p",
+				elt->dwClientID, elt);
+			EHTryToUnregisterClientForEvent(elt->dwClientID);
+			close(elt->dwClientID);
+			Log2(PCSC_LOG_DEBUG, "Waiting client: %d", elt->dwClientID);
+			pthread_join(elt->pthThread, NULL);
+			Log2(PCSC_LOG_INFO, "Client %d terminated", elt->dwClientID);
+		}
+	}
 	list_destroy(&contextsList);
+	(void)pthread_mutex_unlock(&contextsList_lock);
 }
 
 /**
@@ -165,7 +186,7 @@ void ContextsDeinitialize(void)
  *
  * @return Error code.
  * @retval SCARD_S_SUCCESS Success.
- * @retval SCARD_F_INTERNAL_ERROR Exceded the maximum number of simultaneous Application Contexts.
+ * @retval SCARD_F_INTERNAL_ERROR Exceeded the maximum number of simultaneous Application Contexts.
  * @retval SCARD_E_NO_MEMORY Error creating the Context Thread.
  */
 LONG CreateContextThread(uint32_t *pdwClientID)
@@ -209,7 +230,7 @@ LONG CreateContextThread(uint32_t *pdwClientID)
 
 	/* Adding a comparator
 	 * The stored type is SCARDHANDLE (long) but has only 32 bits
-	 * usefull even on a 64-bit CPU since the API between pcscd and
+	 * useful even on a 64-bit CPU since the API between pcscd and
 	 * libpcscliter uses "int32_t hCard;"
 	 */
 	lrv = list_attributes_comparator(&newContext->cardsList,
@@ -276,7 +297,7 @@ out:
  *
  * For each Client message a new instance of this thread is created.
  *
- * @param[in] dwIndex Index of an avaiable Application Context slot in
+ * @param[in] dwIndex Index of an available Application Context slot in
  * \c SCONTEXT *.
  */
 #ifndef NO_LOG
@@ -302,6 +323,7 @@ static const char *CommandsText[] = {
 	"CMD_GET_READERS_STATE",
 	"CMD_WAIT_READER_STATE_CHANGE",
 	"CMD_STOP_WAITING_READER_STATE_CHANGE",	/* 0x14 */
+	"CMD_GET_READER_EVENTS",
 	"NULL"
 };
 #endif
@@ -321,7 +343,7 @@ static const char *CommandsText[] = {
 	WRITE_BODY_WITH_COMMAND(CommandsText[header.command], v)
 #define WRITE_BODY_WITH_COMMAND(command, v) \
 	do { \
-		Log4(PCSC_LOG_DEBUG, "%s rv=0x%X for client %d", command, v.rv, filedes); \
+		LogRv4(PCSC_LOG_DEBUG, v.rv, "%s for client %d", command, filedes); \
 		ret = MessageSend(&v, sizeof(v), filedes); \
 	} while (0)
 
@@ -430,16 +452,34 @@ static void * ContextThread(LPVOID newContext)
 				struct wait_reader_state_change waStr =
 				{
 					.timeOut = 0,
-					.rv = 0
+					.rv = SCARD_S_SUCCESS
 				};
+				LONG rv;
 
 				/* remove the client fd from the list */
-				waStr.rv = EHUnregisterClientForEvent(filedes);
+				rv = EHUnregisterClientForEvent(filedes);
 
 				/* send the response only if the client was still in the
 				 * list */
-				if (waStr.rv != SCARD_F_INTERNAL_ERROR)
+				if (rv != SCARD_F_INTERNAL_ERROR)
+				{
+					waStr.rv = rv;
 					WRITE_BODY(waStr);
+				}
+			}
+			break;
+
+			case CMD_GET_READER_EVENTS:
+			{
+				/* nothing to read */
+
+				struct get_reader_events readerEvents =
+				{
+					.readerEvents = ReaderEvents,
+					.rv = SCARD_S_SUCCESS
+				};
+
+				WRITE_BODY(readerEvents);
 			}
 			break;
 
@@ -492,16 +532,19 @@ static void * ContextThread(LPVOID newContext)
 				if (IsClientAuthorized(filedes, "access_card", coStr.szReader) == 0)
 				{
 					Log2(PCSC_LOG_CRITICAL, "Rejected unauthorized client for '%s'", coStr.szReader);
-					goto exit;
+
+					coStr.rv = SCARD_W_SECURITY_VIOLATION;
+					hCard = -1;
+					dwActiveProtocol = -1;
 				}
 				else
 				{
 					Log2(PCSC_LOG_DEBUG, "Authorized client for '%s'", coStr.szReader);
-				}
 
-				coStr.rv = SCardConnect(coStr.hContext, coStr.szReader,
-					coStr.dwShareMode, coStr.dwPreferredProtocols,
-					&hCard, &dwActiveProtocol);
+					coStr.rv = SCardConnect(coStr.hContext, coStr.szReader,
+						coStr.dwShareMode, coStr.dwPreferredProtocols,
+						&hCard, &dwActiveProtocol);
+				}
 
 				coStr.hCard = hCard;
 				coStr.dwActiveProtocol = dwActiveProtocol;
@@ -523,7 +566,7 @@ static void * ContextThread(LPVOID newContext)
 			case SCARD_RECONNECT:
 			{
 				struct reconnect_struct rcStr;
-				DWORD dwActiveProtocol;
+				DWORD dwActiveProtocol = SCARD_PROTOCOL_UNDEFINED;
 
 				READ_BODY(rcStr);
 
@@ -616,6 +659,8 @@ static void * ContextThread(LPVOID newContext)
 					/* signal the client only if it was still waiting */
 					if (SCARD_S_SUCCESS == rv)
 						caStr.rv = MSGSignalClient(fd, SCARD_E_CANCELLED);
+					else
+						caStr.rv = SCARD_S_SUCCESS;
 				}
 
 				WRITE_BODY(caStr);
@@ -654,8 +699,7 @@ static void * ContextThread(LPVOID newContext)
 					goto exit;
 
 				/* avoids buffer overflow */
-				if ((trStr.pcbRecvLength > sizeof(pbRecvBuffer))
-					|| (trStr.cbSendLength > sizeof(pbSendBuffer)))
+				if (trStr.cbSendLength > sizeof(pbSendBuffer))
 					goto buffer_overflow;
 
 				/* read sent buffer */
@@ -679,7 +723,7 @@ static void * ContextThread(LPVOID newContext)
 				if (cbRecvLength > trStr.pcbRecvLength)
 					/* The client buffer is not large enough.
 					 * The pbRecvBuffer buffer will NOT be sent a few
-					 * lines bellow. So no buffer overflow is expected. */
+					 * lines below. So no buffer overflow is expected. */
 					trStr.rv = SCARD_E_INSUFFICIENT_BUFFER;
 
 				trStr.ioSendPciProtocol = ioSendPci.dwProtocol;
@@ -709,8 +753,7 @@ static void * ContextThread(LPVOID newContext)
 					goto exit;
 
 				/* avoids buffer overflow */
-				if ((ctStr.cbRecvLength > sizeof(pbRecvBuffer))
-					|| (ctStr.cbSendLength > sizeof(pbSendBuffer)))
+				if (ctStr.cbSendLength > sizeof(pbSendBuffer))
 				{
 					goto buffer_overflow;
 				}
@@ -733,7 +776,7 @@ static void * ContextThread(LPVOID newContext)
 				if (dwBytesReturned > ctStr.cbRecvLength)
 					/* The client buffer is not large enough.
 					 * The pbRecvBuffer buffer will NOT be sent a few
-					 * lines bellow. So no buffer overflow is expected. */
+					 * lines below. So no buffer overflow is expected. */
 					ctStr.rv = SCARD_E_INSUFFICIENT_BUFFER;
 
 				ctStr.dwBytesReturned = dwBytesReturned;
@@ -822,7 +865,7 @@ LONG MSGSignalClient(uint32_t filedes, LONG rv)
 	struct wait_reader_state_change waStr =
 	{
 		.timeOut = 0,
-		.rv = 0
+		.rv = SCARD_S_SUCCESS
 	};
 
 	Log2(PCSC_LOG_DEBUG, "Signal client: %d", filedes);
@@ -884,47 +927,53 @@ static LONG MSGRemoveContext(SCARDCONTEXT hContext, SCONTEXT * threadContext)
 		hCard = *(int32_t *)ptr;
 
 		/*
-		 * Unlock the sharing
+		 * Unlock the sharing. If the reader or handle already
+		 * disappeared, skip the disconnection part and just delete the
+		 * orphan handle.
 		 */
 		rv = RFReaderInfoById(hCard, &rContext);
-		if (rv != SCARD_S_SUCCESS)
+		if (rv != SCARD_S_SUCCESS && rv != SCARD_E_INVALID_VALUE
+			&& rv != SCARD_E_READER_UNAVAILABLE)
 		{
 			(void)pthread_mutex_unlock(&threadContext->cardsList_lock);
 			return rv;
 		}
 
-		if (0 == rContext->hLockId)
+		if (rContext)
 		{
-			/* no lock. Just leave the card */
-			(void)SCardDisconnect(hCard, SCARD_LEAVE_CARD);
-		}
-		else
-		{
-			if (hCard != rContext->hLockId)
+			if (0 == rContext->hLockId)
 			{
-				/*
-				 * if the card is locked by someone else we do not reset it
-				 */
-
-				/* decrement card use */
+				/* no lock. Just leave the card */
 				(void)SCardDisconnect(hCard, SCARD_LEAVE_CARD);
 			}
 			else
 			{
-				/* release the lock */
-				rContext->hLockId = 0;
+				if (hCard != rContext->hLockId)
+				{
+					/*
+					 * if the card is locked by someone else we do not reset it
+					 */
 
-				/*
-				 * We will use SCardStatus to see if the card has been
-				 * reset there is no need to reset each time
-				 * Disconnect is called
-				 */
-				rv = SCardStatus(hCard, NULL, NULL, NULL, NULL, NULL, NULL);
-
-				if (rv == SCARD_W_RESET_CARD || rv == SCARD_W_REMOVED_CARD)
+					/* decrement card use */
 					(void)SCardDisconnect(hCard, SCARD_LEAVE_CARD);
+				}
 				else
-					(void)SCardDisconnect(hCard, SCARD_RESET_CARD);
+				{
+					/* release the lock */
+					rContext->hLockId = 0;
+
+					/*
+					 * We will use SCardStatus to see if the card has been
+					 * reset there is no need to reset each time
+					 * Disconnect is called
+					 */
+					rv = SCardStatus(hCard, NULL, NULL, NULL, NULL, NULL, NULL);
+
+					if (rv == SCARD_W_RESET_CARD || rv == SCARD_W_REMOVED_CARD)
+						(void)SCardDisconnect(hCard, SCARD_LEAVE_CARD);
+					else
+						(void)SCardDisconnect(hCard, SCARD_RESET_CARD);
+				}
 			}
 		}
 
@@ -934,7 +983,9 @@ static LONG MSGRemoveContext(SCARDCONTEXT hContext, SCONTEXT * threadContext)
 			Log2(PCSC_LOG_CRITICAL,
 				"list_delete_at failed with return value: %d", lrv);
 
-		UNREF_READER(rContext)
+		if (rContext) {
+			UNREF_READER(rContext)
+		}
 	}
 	(void)pthread_mutex_unlock(&threadContext->cardsList_lock);
 
@@ -1041,7 +1092,7 @@ static LONG MSGCheckHandleAssociation(SCARDHANDLE hCard,
 
 
 /* Should be called just prior to exiting the thread as it de-allocates
- * the thread memory strucutres
+ * the thread memory structures
  */
 static void MSGCleanupClient(SCONTEXT * threadContext)
 {
