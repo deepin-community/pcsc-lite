@@ -3,7 +3,8 @@ SUBDIRS = spy
 AM_CPPFLAGS = -I$(top_srcdir)/src/PCSC -I$(top_builddir)/src/PCSC \
 	$(SYMBOL_VISIBILITY)
 
-lib_LTLIBRARIES = libpcsclite.la
+lib_LTLIBRARIES = libpcsclite.la libpcsclite_real.la
+check_LTLIBRARIES = libpcsclite_fake.la
 
 sbin_PROGRAMS = pcscd
 noinst_PROGRAMS = testpcsc pcsc-wirecheck pcsc-wirecheck-gen
@@ -16,21 +17,29 @@ if ENABLE_USB
 USB_CONFIG = tokenparser.l \
 	hotplug_libudev.c \
 	hotplug_libusb.c \
-	hotplug_linux.c \
 	hotplug_macosx.c
 endif
 
 libpcsclite_la_SOURCES = \
-	debug.c \
 	error.c \
+	g_defines.c \
+	libredirect.c \
+	sys_unix.c
+libpcsclite_la_LDFLAGS = -version-info 1:0:0
+
+libpcsclite_real_la_SOURCES = \
+	debug.c \
 	winscard_clnt.c \
 	simclist.c \
 	sys_unix.c \
 	utils.c \
 	winscard_msg.c
-libpcsclite_la_LDFLAGS = -version-info 1:0:0
-libpcsclite_la_CFLAGS = $(CFLAGS) $(PTHREAD_CFLAGS) -DLIBPCSCLITE -DSIMCLIST_NO_DUMPRESTORE
-libpcsclite_la_LIBADD = $(PTHREAD_CFLAGS) $(PTHREAD_LIBS)
+libpcsclite_real_la_LDFLAGS = -version-info 1:0:0
+libpcsclite_real_la_CFLAGS = $(PTHREAD_CFLAGS) -DLIBPCSCLITE -DSIMCLIST_NO_DUMPRESTORE
+libpcsclite_real_la_LIBADD = $(PTHREAD_CFLAGS) $(PTHREAD_LIBS)
+
+libpcsclite_fake_la_SOURCES = \
+	libfake.c
 
 pcscd_SOURCES = \
 	auth.c \
@@ -41,7 +50,6 @@ pcscd_SOURCES = \
 	$(SERIAL_CONFIG) \
 	debuglog.c \
 	dyn_generic.h \
-	dyn_hpux.c \
 	dyn_macosx.c \
 	dyn_unix.c \
 	eventhandler.c \
@@ -53,10 +61,10 @@ pcscd_SOURCES = \
 	misc.h \
 	parser.h \
 	pcscdaemon.c \
-	pcscd.h \
+	pcscd.h.in \
 	PCSC/debuglog.h \
 	PCSC/ifdhandler.h \
-	PCSC/pcsclite.h \
+	PCSC/pcsclite.h.in \
 	PCSC/winscard.h \
 	PCSC/wintypes.h \
 	prothandler.c \
@@ -76,7 +84,7 @@ pcscd_SOURCES = \
 	winscard_msg_srv.c \
 	winscard_svc.c \
 	winscard_svc.h
-pcscd_CFLAGS = $(CFLAGS) $(PTHREAD_CFLAGS) $(LIBUSB_CFLAGS) $(LIBUDEV_CFLAGS) \
+pcscd_CFLAGS = $(PTHREAD_CFLAGS) $(LIBUSB_CFLAGS) $(LIBUDEV_CFLAGS) \
 	$(POLKIT_CFLAGS) $(LIBSYSTEMD_CFLAGS) \
 	-DPCSCD -DSIMCLIST_NO_DUMPRESTORE
 pcscd_LDFLAGS = $(LDFLAGS) $(LIBSYSTEMD_LIBS) -export-dynamic

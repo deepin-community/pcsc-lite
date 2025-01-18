@@ -3,7 +3,7 @@
  *
  * Copyright (C) 2000-2003
  *  David Corcoran <corcoran@musclecard.com>
- * Copyright (C) 2002-2011
+ * Copyright (C) 2002-2022
  *  Ludovic Rousseau <ludovic.rousseau@free.fr>
  *
 Redistribution and use in source and binary forms, with or without
@@ -41,22 +41,21 @@ THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  */
 
 #include "config.h"
-#include "pcsclite.h"
+#include "hotplug.h"
 
-#ifndef TRUE
-#define TRUE 1
-#define FALSE 0
-#endif
+#if !defined(__APPLE__) && !defined(HAVE_LIBUSB) && !defined(HAVE_LIBUDEV)
 
-#if !defined(__APPLE__) && !defined(HAVE_LIBUSB) && !defined(__linux__) && !defined(HAVE_LIBUDEV)
-
-LONG HPSearchHotPluggables(void)
+LONG HPSearchHotPluggables(const char * hpDirPath)
 {
+	(void)hpDirPath;
+
 	return 0;
 }
 
-ULONG HPRegisterForHotplugEvents(void)
+ULONG HPRegisterForHotplugEvents(const char * hpDirPath)
 {
+	(void)hpDirPath;
+
 	return 0;
 }
 

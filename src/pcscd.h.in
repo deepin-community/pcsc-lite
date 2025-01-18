@@ -44,7 +44,7 @@
 
 #define PCSCLITE_CONFIG_DIR		"@PCSCLITE_CONFIG_DIR@"
 
-#define PCSCLITE_IPC_DIR		USE_IPCDIR
+#define PCSCLITE_IPC_DIR		"@ipcdir@"
 #define PCSCLITE_RUN_PID		PCSCLITE_IPC_DIR "/pcscd.pid"
 
 #define PCSCLITE_CSOCK_NAME		PCSCLITE_IPC_DIR "/pcscd.comm"
@@ -56,9 +56,6 @@
 #define PCSC_MAX_CONTEXT_THREADS 200
 #define PCSC_MAX_CONTEXT_CARD_HANDLES 200
 #define PCSC_MAX_READER_HANDLES 200
-
-#define PCSCLITE_STATUS_WAIT		200000	/**< Status Change Sleep */
-#define MAX_DEVICENAME		255
 
 /** Different values for struct ReaderContext powerState field */
 enum

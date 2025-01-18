@@ -1,4 +1,7 @@
 usr/share/doc/pcsc-lite/README.DAEMON
+usr/lib/*/libpcsclite.a
 usr/lib/*/libpcsclite.la
+usr/lib/*/libpcsclite_real.la
+usr/lib/*/libpcsclite_real.so
 usr/lib/*/libpcscspy.so
 usr/lib/*/libpcscspy.la

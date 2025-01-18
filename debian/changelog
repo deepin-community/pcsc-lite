@@ -1,3 +1,205 @@
+pcsc-lite (2.3.1-1) unstable; urgency=medium
+
+  * new upstream release
+  * Install /etc/default/pcscd in pcscd package
+  * d/not-installed: add libpcsclite.a
+  * d/control: remove redundant dh-runit
+  * Fix "restored initscript would be helpful" by applying salsa
+    merge-requests (Closes: #1090333)
+
+ -- Ludovic Rousseau <rousseau@debian.org>  Tue, 24 Dec 2024 11:32:34 +0100
+
+pcsc-lite (2.3.0-3) unstable; urgency=medium
+
+  * d/pcscd.maintscript: remove conffile /etc/init.d/pcscd
+  * Fix "leftover conffiles" by above change (Closes: #1086440)
+
+ -- Ludovic Rousseau <rousseau@debian.org>  Sat, 02 Nov 2024 18:38:38 +0100
+
+pcsc-lite (2.3.0-2) unstable; urgency=medium
+
+  [ Pino Toscano ]
+  * Make pcsc-lite build again on non-Linux architectures:
+    - add the dh-exec build dependency, needed for architecture filtering
+      in install files
+    - restrict the libsystemd-dev build dependency to Linux
+    - drop the libusb2-dev build dependency, specific to the discontinued
+      kFreeBSD architectures
+    - add the libusb-1.0-0-dev build dependency for libusb support on
+      non-Linux architectures
+    - limit the runtime systemd suggest to Linux
+    - explicitly enable libudev, and libsystemd on Linux architectures,
+      disabling libusb; on non-Linux architectures do the exact opposite
+      (libudev, and libsystemd off, and libusb on)
+    - pass -Dsystemdunit to meson only on Linux, useless otherwise
+    - d/pcscd.install: install systemd files only on Linux
+  * Use /usr/share/dpkg/architecture.mk instead of manual queries
+  * d/rules: drop redundant "meson configure" call
+
+  [ Ludovic Rousseau ]
+  * d/control: Standards-Version: 4.6.2 -> 4.7.0. No change needed.
+
+ -- Ludovic Rousseau <rousseau@debian.org>  Sun, 20 Oct 2024 22:10:45 +0200
+
+pcsc-lite (2.3.0-1) unstable; urgency=medium
+
+  * new upstream release
+  * Fix "Add Appstream metainfo announcing HW support" (Closes: #1076439)
+  * d/pcscd.install: install metainfo.xml file
+  * d/copyright: metainfo.xml file uses MIT license
+
+ -- Ludovic Rousseau <rousseau@debian.org>  Sat, 03 Aug 2024 17:31:19 +0200
+
+pcsc-lite (2.2.3-1) unstable; urgency=medium
+
+  * new upstream release
+
+ -- Ludovic Rousseau <rousseau@debian.org>  Sun, 26 May 2024 17:17:22 +0200
+
+pcsc-lite (2.2.2-1) unstable; urgency=medium
+
+  * new upstream release
+  * d/control: Build-Depends on systemd-dev
+  * d/pcscd.manpages; re-add reader.conf.5
+
+ -- Ludovic Rousseau <rousseau@debian.org>  Mon, 20 May 2024 18:04:19 +0200
+
+pcsc-lite (2.2.1-1) unstable; urgency=medium
+
+  * new upstream release
+  * d/rules: no need to specify --sbindir anymore
+
+ -- Ludovic Rousseau <rousseau@debian.org>  Wed, 08 May 2024 12:13:57 +0200
+
+pcsc-lite (2.2.0-1) unstable; urgency=medium
+
+  * new upstream release
+  * Switch from autoconf/automake to meson
+  * d/control: remove autoconf-archive and add meson & sustemd
+  * d/rules: remove configure.ac & Makefile.am to use meson
+
+ -- Ludovic Rousseau <rousseau@debian.org>  Fri, 03 May 2024 16:15:19 +0200
+
+pcsc-lite (2.1.0-1) experimental; urgency=medium
+
+  * new upstream release
+  * d/libpcsclite-dev.docs: spy setup script is now setup_spy.sh
+  * Install libpcsclite_real.1.*
+  * d/libpcsclite-dev.symbols: update symbol list
+
+ -- Ludovic Rousseau <rousseau@debian.org>  Fri, 12 Apr 2024 14:06:53 +0200
+
+pcsc-lite (2.0.3-1) unstable; urgency=medium
+
+  * new upstream release
+
+ -- Ludovic Rousseau <rousseau@debian.org>  Sun, 03 Mar 2024 18:45:42 +0100
+
+pcsc-lite (2.0.2-1) unstable; urgency=medium
+
+  * new upstream release
+  * Fix "The i386 libpcsclite-dev 2.0.1-1+b1 package conflicts with the
+    amd64 one" with upstream patch (Closes: #1064636)
+  * d/control: Build-Depends on pkgconf
+  * d/copyright: update copyright year
+
+ -- Ludovic Rousseau <rousseau@debian.org>  Sun, 03 Mar 2024 14:45:25 +0100
+
+pcsc-lite (2.0.1-1) unstable; urgency=medium
+
+  * new upstream release
+  * d/control: Build-Depends: libpolkit-gobject-1-dev
+  * d/pcscd: install polkit config file
+
+ -- Ludovic Rousseau <rousseau@debian.org>  Fri, 24 Nov 2023 17:43:35 +0100
+
+pcsc-lite (2.0.0-1) unstable; urgency=medium
+
+  * new upstream release
+  * Fix "Multiarch doesn't work for libpcsclite-dev (needed by current
+    wine git)": lower libpcsclite-dev dependency on pyton3 (Closes: #1035627)
+  * d/control: Standards-Version: 4.6.1 -> 4.6.2. No change needed.
+  * d/copyright: update-debian-copyright 2022 vs 2023
+
+ -- Ludovic Rousseau <rousseau@debian.org>  Fri, 09 Jun 2023 17:23:32 +0200
+
+pcsc-lite (1.9.9-2) unstable; urgency=medium
+
+  * Fix "dh_installsystemd doesn't handle files in
+    /usr/lib/systemd/system" (Closes: #1034209)
+  * d/control: remove lsb-base dependency and fix lintian error
+
+ -- Ludovic Rousseau <rousseau@debian.org>  Tue, 11 Apr 2023 19:15:00 +0200
+
+pcsc-lite (1.9.9-1) unstable; urgency=medium
+
+  * new upstream release
+  * d/pcscd.init: use "grep -E" instead of deprecated "egrep"
+   Closes: #1019322
+  * d/control: Standards-Version: 4.6.0 -> 4.6.1. No change needed.
+  * d/copyright: fix match for simclist
+  * d/copyright: update Copyright dates
+
+ -- Ludovic Rousseau <rousseau@debian.org>  Sun, 11 Sep 2022 16:43:51 +0200
+
+pcsc-lite (1.9.8-1) unstable; urgency=medium
+
+  * new upstream release
+  * include install_spy.sh & uninstall_spy.sh scripts in the libpcsclite-dev
+    package
+
+ -- Ludovic Rousseau <rousseau@debian.org>  Sat, 11 Jun 2022 11:04:57 +0200
+
+pcsc-lite (1.9.7-1) unstable; urgency=medium
+
+  * new upstream release
+
+ -- Ludovic Rousseau <rousseau@debian.org>  Fri, 13 May 2022 13:14:55 +0200
+
+pcsc-lite (1.9.6-1) unstable; urgency=medium
+
+  * new upstream release
+
+ -- Ludovic Rousseau <rousseau@debian.org>  Wed, 11 May 2022 17:38:54 +0200
+
+pcsc-lite (1.9.5-3) unstable; urgency=medium
+
+  [ Debian Janitor ]
+  * Remove constraints unnecessary since buster:
+    + Build-Depends: Drop versioned constraint on dpkg-dev.
+    + pcscd: Drop versioned constraint on libccid and lsb-base in Depends.
+
+  [ Ludovic Rousseau ]
+  * d/copyright: fix lintian warning: superfluous-file-pattern
+    W: pcsc-lite source: superfluous-file-pattern debian/copyright
+    simclist.[ch] (Files, line 77)
+  * d/copyright: fix lintian warning: superfluous-file-pattern
+    W: pcsc-lite source: superfluous-file-pattern debian/copyright
+    src/sd-daemon.[ch] (Files, line 39)
+  * d/copyright: fix lintian warning: superfluous-file-pattern
+    W: pcsc-lite source: superfluous-file-pattern debian/copyright
+    src/strlcpy.c (Files, line 62)
+  * d/control: Standards-Version: 4.5.1 -> 4.6.0. No change needed.
+
+ -- Ludovic Rousseau <rousseau@debian.org>  Fri, 18 Feb 2022 12:00:37 +0100
+
+pcsc-lite (1.9.5-2) unstable; urgency=medium
+
+  * Fix "debian/copyright contains links to Alioth" by updating URLs
+    (Closes: #1001325)
+  * d/pcscd.postinst: removed as pcscd is already automatically restarted.
+    Thanks to Uwe Kleine-König for the notice in #1001155.
+
+ -- Ludovic Rousseau <rousseau@debian.org>  Fri, 10 Dec 2021 14:10:22 +0100
+
+pcsc-lite (1.9.5-1) unstable; urgency=medium
+
+  * Fix "socket /run/pcscd/pcscd.comm immediately removed upon start"
+    d/pcscd.postinst: restart pcscd on install (Closes: #995814)
+  * new upstream release
+
+ -- Ludovic Rousseau <rousseau@debian.org>  Sat, 04 Dec 2021 13:38:46 +0100
+
 pcsc-lite (1.9.4-1) unstable; urgency=medium
 
   * d/upstream/metadata: add DEP12/UMEGAYA file
