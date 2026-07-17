@@ -11,7 +11,7 @@
 
 project('pcsc-lite', 'c',
   meson_version : '>=0.58.0',
-  version : '2.3.1')
+  version : '2.3.3')
 
 # for config.h
 conf_data = configuration_data({
@@ -123,6 +123,7 @@ if get_option('polkit')
   polkit_dep = dependency('polkit-gobject-1')
   pcscd_dep += polkit_dep
   conf_data.set('HAVE_POLKIT', true)
+  confgen_data.set('requires_polkit', 'Requires=polkit.service')
   features += 'polkit'
 endif
 

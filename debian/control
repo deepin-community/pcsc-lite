@@ -21,7 +21,7 @@ Homepage: https://pcsclite.apdu.fr/
 
 Package: pcscd
 Architecture: any
-Depends: libccid | pcsc-ifd-handler, ${shlibs:Depends}, ${misc:Depends}, libpcsclite1 (= ${binary:Version})
+Depends: libccid | pcsc-ifd-handler, ${shlibs:Depends}, ${misc:Depends}, libpcsclite1 (= ${binary:Version}), polkitd
 Suggests: systemd [linux-any]
 Multi-Arch: foreign
 Pre-Depends: ${misc:Pre-Depends}
