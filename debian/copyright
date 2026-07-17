@@ -57,6 +57,6 @@ License: MIT
  /use/share/common-licenses/MIT
 
 Files: debian/*  src/spy/*
-Copyright: 2002-2024, Ludovic Rousseau <ludovic.rousseau@free.fr>
+Copyright: 2002-2025, Ludovic Rousseau <ludovic.rousseau@free.fr>
 License: GPL-3+
  /usr/share/common-licenses/GPL-3

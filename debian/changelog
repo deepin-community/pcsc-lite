@@ -1,3 +1,22 @@
+pcsc-lite (2.3.3-1) unstable; urgency=medium
+
+  * new upstream release
+  * d/copyright: update date
+
+ -- Ludovic Rousseau <rousseau@debian.org>  Wed, 02 Apr 2025 17:58:37 +0200
+
+pcsc-lite (2.3.2-2) unstable; urgency=medium
+
+  * Add Depends: polkitd for pcscd
+
+ -- Ludovic Rousseau <rousseau@debian.org>  Mon, 31 Mar 2025 18:19:14 +0200
+
+pcsc-lite (2.3.2-1) unstable; urgency=medium
+
+  * new upstream release
+
+ -- Ludovic Rousseau <rousseau@debian.org>  Wed, 26 Mar 2025 16:09:18 +0100
+
 pcsc-lite (2.3.1-1) unstable; urgency=medium
 
   * new upstream release
